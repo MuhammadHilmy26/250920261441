@@ -1,5 +1,19 @@
+// Konfigurasi Firebase (Ganti dengan config dari Project Firebase kamu)
+const firebaseConfig = {
+    apiKey: "GANTI_DENGAN_API_KEY_ANDA",
+    authDomain: "GANTI_DENGAN_AUTH_DOMAIN",
+    projectId: "muhammadhilmy",
+    storageBucket: "GANTI_DENGAN_STORAGE_BUCKET",
+    messagingSenderId: "GANTI_DENGAN_SENDER_ID",
+    appId: "GANTI_DENGAN_APP_ID"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+const adminEmail = "databasechat@muhammadhilmy.iam.gserviceaccount.com";
 let currentUser = null;
-const adminEmail = "databasechat@muhammadhilmy.iam.gserviceaccount.com"; // Email Service Account / Admin
 let mapInstance = null;
 let watchId = null;
 
@@ -18,23 +32,20 @@ function switchTab(tabName) {
     }
 }
 
-// Fitur Validasi Geolocation & Proteksi Halaman
+// Cek Izin Geolocation
 function checkLocationAccess() {
     if (!navigator.geolocation) {
         alert("Browser Anda tidak mendukung Geolocation.");
         return;
     }
 
-    // Cek izin lokasi secara real-time
     navigator.geolocation.getCurrentPosition(
         (position) => {
-            // Jika diizinkan, pindah ke halaman lokasi
             switchTab('location');
             initMap(position.coords.latitude, position.coords.longitude);
             startRealtimeTracking();
         },
         (error) => {
-            // Jika ditolak atau tidak aktif, kembalikan ke home
             alert("Akses lokasi wajib diaktifkan untuk masuk ke halaman ini!");
             switchTab('home');
         },
@@ -42,7 +53,6 @@ function checkLocationAccess() {
     );
 }
 
-// Inisialisasi Peta Leaflet
 function initMap(lat, lng) {
     const mapDiv = document.getElementById('map');
     if (mapInstance) {
@@ -58,7 +68,6 @@ function initMap(lat, lng) {
         .bindPopup("Lokasi Terkini Anda").openPopup();
 }
 
-// Real-time tracking lokasi
 function startRealtimeTracking() {
     if (watchId) navigator.geolocation.clearWatch(watchId);
 
@@ -91,7 +100,7 @@ function closeUploadModal() {
     document.getElementById('upload-modal').style.display = 'none';
 }
 
-// Manajemen Postingan & Kedaluwarsa 30 Hari (LocalStorage Simulation)
+// SIMPAN POSTINGAN KE DATABASE FIRESTORE (Sinkron Antar Device)
 function submitPost() {
     const fileInput = document.getElementById('media-file');
     const captionInput = document.getElementById('media-caption');
@@ -105,106 +114,123 @@ function submitPost() {
     const reader = new FileReader();
 
     reader.onload = function(e) {
-        const posts = JSON.parse(localStorage.getItem('geo_posts') || '[]');
-        
         const newPost = {
-            id: Date.now(),
             mediaUrl: e.target.result,
             mediaType: file.type.startsWith('video') ? 'video' : 'image',
             caption: captionInput.value,
-            timestamp: new Date().getTime(), // Simpan waktu posting
+            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+            rawTime: new Date().getTime(),
             user: currentUser ? currentUser.email : "Anonim"
         };
 
-        posts.unshift(newPost);
-        localStorage.setItem('geo_posts', JSON.stringify(posts));
-
-        fileInput.value = '';
-        captionInput.value = '';
-        closeUploadModal();
-        loadPosts();
+        db.collection("posts").add(newPost).then(() => {
+            fileInput.value = '';
+            captionInput.value = '';
+            closeUploadModal();
+            loadPosts();
+        }).catch((error) => {
+            alert("Gagal mengunggah postingan: " + error.message);
+        });
     };
 
     reader.readAsDataURL(file);
 }
 
-// Filter postingan (Hanya tampilkan yang berumur < 30 hari)
+// AMBIL POSTINGAN DARI FIRESTORE & FILTER 30 HARI
 function loadPosts() {
     const feedList = document.getElementById('feed-list');
-    feedList.innerHTML = '';
+    feedList.innerHTML = '<p style="text-align:center;">Memuat postingan...</p>';
 
-    const posts = JSON.parse(localStorage.getItem('geo_posts') || '[]');
-    const now = new Date().getTime();
-    const thirtyDaysInMillis = 30 * 24 * 60 * 60 * 1000;
+    db.collection("posts").orderBy("rawTime", "desc").get().then((querySnapshot) => {
+        feedList.innerHTML = '';
+        const now = new Date().getTime();
+        const thirtyDaysInMillis = 30 * 24 * 60 * 60 * 1000;
+        let hasValidPost = false;
 
-    // Filter otomatis hapus/abaikan postingan > 30 hari
-    const validPosts = posts.filter(post => (now - post.timestamp) < thirtyDaysInMillis);
-    
-    // Perbarui penyimpanan jika ada yang terhapus
-    localStorage.setItem('geo_posts', JSON.stringify(validPosts));
+        querySnapshot.forEach((doc) => {
+            const post = doc.data();
+            const postId = doc.id;
 
-    if (validPosts.length === 0) {
-        feedList.innerHTML = '<p style="text-align:center;">Belum ada postingan atau sudah kedaluwarsa (30 hari).</p>';
-        return;
-    }
+            // Filter otomatis masa kedaluwarsa 30 hari
+            if ((now - post.rawTime) < thirtyDaysInMillis) {
+                hasValidPost = true;
+                const card = document.createElement('div');
+                card.className = 'feed-card';
 
-    validPosts.forEach(post => {
-        const card = document.createElement('div');
-        card.className = 'feed-card';
+                let mediaElement = post.mediaType === 'video' 
+                    ? `<video controls src="${post.mediaUrl}"></video>` 
+                    : `<img src="${post.mediaUrl}" alt="Post">`;
 
-        let mediaElement = post.mediaType === 'video' 
-            ? `<video controls src="${post.mediaUrl}"></video>` 
-            : `<img src="${post.mediaUrl}" alt="Post">`;
+                let deleteBtn = '';
+                if (currentUser && currentUser.email === adminEmail) {
+                    deleteBtn = `<button onclick="deletePost('${postId}')" style="background:red; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; float:right;">Hapus (Admin)</button>`;
+                }
 
-        let deleteBtn = '';
-        // Cek hak akses admin
-        if (currentUser && (currentUser.email === adminEmail || currentUser.isAdmin)) {
-            deleteBtn = `<button onclick="deletePost(${post.id})" style="background:red; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; float:right;">Hapus (Admin)</button>`;
+                card.innerHTML = `
+                    <small>Diposting oleh: <b>${post.user}</b></small>
+                    ${deleteBtn}
+                    <div style="margin-top: 10px;">${mediaElement}</div>
+                    <p>${post.caption}</p>
+                `;
+                feedList.appendChild(card);
+            } else {
+                // Hapus otomatis jika sudah > 30 hari dari database
+                db.collection("posts").doc(postId).delete();
+            }
+        });
+
+        if (!hasValidPost) {
+            feedList.innerHTML = '<p style="text-align:center;">Belum ada postingan atau sudah kedaluwarsa (30 hari).</p>';
         }
-
-        card.innerHTML = `
-            <small>Diposting oleh: <b>${post.user}</b></small>
-            ${deleteBtn}
-            <div style="margin-top: 10px;">${mediaElement}</div>
-            <p>${post.caption}</p>
-        `;
-        feedList.appendChild(card);
     });
 }
 
 function deletePost(id) {
-    let posts = JSON.parse(localStorage.getItem('geo_posts') || '[]');
-    posts = posts.filter(post => post.id !== id);
-    localStorage.setItem('geo_posts', JSON.stringify(posts));
-    loadPosts();
+    if (confirm("Yakin ingin menghapus postingan ini?")) {
+        db.collection("posts").doc(id).delete().then(() => {
+            loadPosts();
+        });
+    }
 }
 
-// Simulasi Login Google & Validasi Admin
+// LOGIN GOOGLE ASLI MENGGUNAKAN FIREBASE AUTH
 function loginGoogle() {
-    // Simulasi prompt akun google (bisa diintegrasikan Firebase Auth SDK asli)
-    const emailMasuk = prompt("Simulasi Login Google. Masukkan email Anda:", "user@gmail.com");
-    if (!emailMasuk) return;
-
-    currentUser = {
-        email: emailMasuk,
-        isAdmin: emailMasuk === adminEmail || emailMasuk.includes("admin")
-    };
-
-    document.getElementById('btn-login').style.display = 'none';
-    document.getElementById('user-profile').style.display = 'inline-block';
-    document.getElementById('user-name').innerText = currentUser.email;
-
-    loadPosts();
+    const provider = new firebase.auth.GoogleAuthProvider();
+    auth.signInWithPopup(provider).then((result) => {
+        currentUser = result.user;
+        updateAuthUI();
+        loadPosts();
+    }).catch((error) => {
+        alert("Login gagal: " + error.message);
+    });
 }
 
 function logoutGoogle() {
-    currentUser = null;
-    document.getElementById('btn-login').style.display = 'inline-block';
-    document.getElementById('user-profile').style.display = 'none';
-    loadPosts();
+    auth.signOut().then(() => {
+        currentUser = null;
+        updateAuthUI();
+        loadPosts();
+    });
 }
 
-// Load feed saat halaman pertama kali dibuka
-window.onload = function() {
+function updateAuthUI() {
+    if (currentUser) {
+        document.getElementById('btn-login').style.display = 'none';
+        document.getElementById('user-profile').style.display = 'inline-block';
+        document.getElementById('user-name').innerText = currentUser.email;
+    } else {
+        document.getElementById('btn-login').style.display = 'inline-block';
+        document.getElementById('user-profile').style.display = 'none';
+    }
+}
+
+// Cek status login saat halaman dimuat
+auth.onAuthStateChanged((user) => {
+    if (user) {
+        currentUser = user;
+    } else {
+        currentUser = null;
+    }
+    updateAuthUI();
     loadPosts();
-};
+});

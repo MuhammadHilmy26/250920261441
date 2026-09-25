@@ -1,14 +1,5 @@
-// Konfigurasi Firebase (Ganti dengan config dari Project Firebase kamu)
-<script type="module">
-  // Import the functions you need from the SDKs you need
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
-  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-analytics.js";
-  // TODO: Add SDKs for Firebase products that you want to use
-  // https://firebase.google.com/docs/web/setup#available-libraries
-
-  // Your web app's Firebase configuration
-  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-  const firebaseConfig = {
+// Konfigurasi Firebase Project Anda
+const firebaseConfig = {
     apiKey: "AIzaSyChjm_brzDENv5nRJHrnedBr8JH1mCa2Zo",
     authDomain: "for-a-break.firebaseapp.com",
     projectId: "for-a-break",
@@ -16,14 +7,9 @@
     messagingSenderId: "407244603896",
     appId: "1:407244603896:web:6a49c2a8cc58c20622d60d",
     measurementId: "G-4FMCQ17CG5"
-  };
-
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
-  const analytics = getAnalytics(app);
-</script>
 };
 
+// Inisialisasi Firebase Compat
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
@@ -116,7 +102,7 @@ function closeUploadModal() {
     document.getElementById('upload-modal').style.display = 'none';
 }
 
-// SIMPAN POSTINGAN KE DATABASE FIRESTORE (Sinkron Antar Device)
+// SIMPAN POSTINGAN KE DATABASE FIRESTORE
 function submitPost() {
     const fileInput = document.getElementById('media-file');
     const captionInput = document.getElementById('media-caption');
@@ -167,7 +153,6 @@ function loadPosts() {
             const post = doc.data();
             const postId = doc.id;
 
-            // Filter otomatis masa kedaluwarsa 30 hari
             if ((now - post.rawTime) < thirtyDaysInMillis) {
                 hasValidPost = true;
                 const card = document.createElement('div');
@@ -190,7 +175,6 @@ function loadPosts() {
                 `;
                 feedList.appendChild(card);
             } else {
-                // Hapus otomatis jika sudah > 30 hari dari database
                 db.collection("posts").doc(postId).delete();
             }
         });
@@ -198,6 +182,9 @@ function loadPosts() {
         if (!hasValidPost) {
             feedList.innerHTML = '<p style="text-align:center;">Belum ada postingan atau sudah kedaluwarsa (30 hari).</p>';
         }
+    }).catch((error) => {
+        console.error("Gagal memuat post:", error);
+        feedList.innerHTML = '<p style="text-align:center;">Gagal memuat data dari database.</p>';
     });
 }
 
@@ -209,7 +196,7 @@ function deletePost(id) {
     }
 }
 
-// LOGIN GOOGLE ASLI MENGGUNAKAN FIREBASE AUTH
+// LOGIN GOOGLE
 function loginGoogle() {
     const provider = new firebase.auth.GoogleAuthProvider();
     auth.signInWithPopup(provider).then((result) => {
@@ -240,7 +227,6 @@ function updateAuthUI() {
     }
 }
 
-// Cek status login saat halaman dimuat
 auth.onAuthStateChanged((user) => {
     if (user) {
         currentUser = user;

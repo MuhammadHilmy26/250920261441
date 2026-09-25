@@ -1,11 +1,27 @@
 // Konfigurasi Firebase (Ganti dengan config dari Project Firebase kamu)
-const firebaseConfig = {
-    apiKey: "GANTI_DENGAN_API_KEY_ANDA",
-    authDomain: "GANTI_DENGAN_AUTH_DOMAIN",
-    projectId: "muhammadhilmy",
-    storageBucket: "GANTI_DENGAN_STORAGE_BUCKET",
-    messagingSenderId: "GANTI_DENGAN_SENDER_ID",
-    appId: "GANTI_DENGAN_APP_ID"
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-analytics.js";
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
+
+  // Your web app's Firebase configuration
+  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+  const firebaseConfig = {
+    apiKey: "AIzaSyChjm_brzDENv5nRJHrnedBr8JH1mCa2Zo",
+    authDomain: "for-a-break.firebaseapp.com",
+    projectId: "for-a-break",
+    storageBucket: "for-a-break.firebasestorage.app",
+    messagingSenderId: "407244603896",
+    appId: "1:407244603896:web:6a49c2a8cc58c20622d60d",
+    measurementId: "G-4FMCQ17CG5"
+  };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+</script>
 };
 
 firebase.initializeApp(firebaseConfig);
